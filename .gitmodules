@@ -1,0 +1,4 @@
+[submodule "vendor/ha-mazda"]
+	path = vendor/ha-mazda
+	url = https://github.com/fano0001/home-assistant-mazda.git
+	branch = v2.2.0-beta

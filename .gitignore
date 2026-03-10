@@ -1,0 +1,5 @@
+.env
+flows
+__pycache__/
+*.pyc
+.superpowers/
