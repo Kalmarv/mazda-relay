@@ -4,16 +4,24 @@ FastAPI service that wraps the Mazda Connected Services v2 API. Provides a simpl
 
 ## API
 
+All read endpoints accept an optional `?units=imperial|metric` query parameter (default: `imperial`).
+
 **Read:**
-- `GET /vehicle` — model, VIN, color, features
-- `GET /status` — fuel, odometer, location, doors, locks, windows, tires, oil
-- `GET /health` — warning lights
-- `POST /refresh` — wake TCU for fresh telemetry
+| Endpoint | Description |
+|----------|-------------|
+| `GET /vehicle` | Static info — model, VIN, color, engine, transmission, capabilities |
+| `GET /status` | Live telemetry — fuel, odometer, location, doors, locks, windows, tires, oil |
+| `GET /health` | Warning lights report |
 
 **Write:**
-- `POST /lock` / `POST /unlock`
-- `POST /engine/start` / `POST /engine/stop`
-- `POST /lights/flash` — `{"count": 2}` or `{"count": 30}`
+| Endpoint | Description |
+|----------|-------------|
+| `POST /refresh` | Wake TCU and request fresh telemetry (~10s) |
+| `POST /lock` | Lock all doors |
+| `POST /unlock` | Unlock all doors |
+| `POST /engine/start` | Remote start (max 2 consecutive before driving) |
+| `POST /engine/stop` | Stop remotely-started engine |
+| `POST /lights/flash` | Flash lights — `{"count": 2}` (short) or `{"count": 30}` (long) |
 
 Interactive docs at `/docs` (Swagger UI).
 

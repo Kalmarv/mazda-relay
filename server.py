@@ -7,8 +7,15 @@ import sys
 from contextlib import asynccontextmanager
 
 import aiohttp
-from fastapi import FastAPI, HTTPException
+from enum import Enum
+
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
+
+
+class Units(str, Enum):
+    metric = "metric"
+    imperial = "imperial"
 
 # Add the submodule's pymazda to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vendor/ha-mazda/custom_components/mazda_cs"))
@@ -175,6 +182,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Mazda Relay", version="0.1.0", lifespan=lifespan)
 
 
+def _km_to_miles(km):
+    return round(km * 0.621371, 1) if km is not None else None
+
+
 async def _api_call(coro_fn, *args):
     """Wrap a controller call with reconnect-on-failure."""
     try:
@@ -200,9 +211,10 @@ async def get_vehicle():
 
 
 @app.get("/status")
-async def get_status():
+async def get_status(units: Units = Query(Units.imperial)):
     """Current vehicle status (fuel, odometer, location, doors, tires, oil)."""
     raw = await _api_call(state.controller.get_vehicle_status, state.internal_vin)
+    imperial = units == Units.imperial
 
     remote = raw.get("remoteInfos", [{}])[0]
     alert = raw.get("alertInfos", [{}])[0]
@@ -225,8 +237,13 @@ async def get_status():
     if lat is not None and pos.get("LatitudeFlag") == 1:
         lat = -lat
 
+    odo = drive.get("OdoDispValueMile") if imperial else drive.get("OdoDispValue")
+    fuel_range = fuel.get("RemDrvDistDActlMile") if imperial else fuel.get("RemDrvDistDActlKm")
+    oil_next = _km_to_miles(oil.get("RemOilDistK")) if imperial else oil.get("RemOilDistK")
+
     return {
         "lastUpdated": alert.get("OccurrenceDate"),
+        "units": units.value,
         "location": {
             "latitude": lat,
             "longitude": lon,
@@ -234,13 +251,9 @@ async def get_status():
         },
         "fuel": {
             "remainingPercent": fuel.get("FuelSegementDActl"),
-            "remainingRangeKm": fuel.get("RemDrvDistDActlKm"),
-            "remainingRangeMiles": fuel.get("RemDrvDistDActlMile"),
+            "remainingRange": fuel_range,
         },
-        "odometer": {
-            "km": drive.get("OdoDispValue"),
-            "miles": drive.get("OdoDispValueMile"),
-        },
+        "odometer": odo,
         "engine": {
             "state": elec.get("EngineState"),  # 3 = off
             "powerControlStatus": elec.get("PowerControlStatus"),
@@ -274,7 +287,7 @@ async def get_status():
         },
         "oil": {
             "lifePercent": oil.get("DROilDeteriorateLevel"),
-            "nextChangeKm": oil.get("RemOilDistK"),
+            "nextChange": oil_next,
             "levelStatus": oil.get("OilLevelStatusMonitor"),
         },
         "hazardLights": alert.get("HazardLamp", {}).get("HazardSw") == 1,
@@ -282,15 +295,14 @@ async def get_status():
 
 
 @app.get("/health")
-async def get_health():
+async def get_health(units: Units = Query(Units.imperial)):
     """Health report (warning lights)."""
     raw = await _api_call(state.controller.get_health_report, state.internal_vin)
     remote = raw.get("remoteInfos", [{}])[0]
+    imperial = units == Units.imperial
     return {
-        "odometer": {
-            "km": remote.get("OdoDispValue"),
-            "miles": remote.get("OdoDispValueMile"),
-        },
+        "units": units.value,
+        "odometer": remote.get("OdoDispValueMile") if imperial else remote.get("OdoDispValue"),
         "warnings": {
             "oilAmountExceed": remote.get("WngOilAmountExceed") == 1,
             "oilShortage": remote.get("WngOilShortage") == 1,
@@ -355,5 +367,3 @@ async def flash_lights(req: FlashRequest):
         raise HTTPException(status_code=400, detail="count must be 2 or 30")
     result = await _api_call(state.controller.flash_lights, state.internal_vin, _FLASH_PARAMS[req.count])
     return {"result": result.get("resultCode"), "flashes": req.count}
-
-
