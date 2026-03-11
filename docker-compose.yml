@@ -1,0 +1,10 @@
+services:
+  mazda-relay:
+    build: .
+    container_name: mazda-relay
+    restart: always
+    env_file: .env
+    ports:
+      - "8201:8200"
+    volumes:
+      - ./.env:/app/.env

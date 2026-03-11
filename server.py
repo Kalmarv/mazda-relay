@@ -47,8 +47,9 @@ class TokenManager:
         self.env_path = env_path
 
     async def get_access_token(self) -> str:
-        if self.access_token:
-            return self.access_token
+        """Always fetch a fresh token — this is only called when Connection has
+        cleared its cached token (startup or after 600002), so a real OAuth
+        refresh is the correct thing to do."""
         await self.refresh()
         return self.access_token
 
@@ -192,8 +193,8 @@ async def _api_call(coro_fn, *args):
         return await coro_fn(*args)
     except MazdaException as e:
         err = str(e)
-        # Session conflict or token issues — reconnect and retry once
-        if any(code in err for code in ["600100", "600002", "CST400000"]):
+        # Session conflict, token issues, or exhausted retries — reconnect and retry once
+        if any(code in err for code in ["600100", "600002", "CST400000", "max number of retries"]):
             await state.reconnect()
             return await coro_fn(*args)
         raise HTTPException(status_code=502, detail=err)
